@@ -1,8 +1,6 @@
 """
 Author: Chaitanya Chadha
-Email: chaitanyachadha12@gwu.edu
-Created on: 02-06-2025
-Updated on: 
+Email: chaitanyachadha12@gmail.com
 """
 
 from typing import List, Dict

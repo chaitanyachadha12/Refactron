@@ -1,8 +1,6 @@
 """
 Author: Chaitanya Chadha
-Email: chaitanyachadha12@gwu.edu
-Created on: 02-06-2025
-Updated on: 
+Email: chaitanyachadha12@gmail.com
 """
 
 import requests
@@ -10,36 +8,60 @@ import json
 
 class LLMIntegration:
     """
-    LLMIntegration class to handle communication with the local LLM (Ollama using qwen2.5-coder).
+    Handles communication with the local LLM (e.g., Ollama running qwen2.5-coder).
+
+    IMPORTANT:
+    - Ensure your local LLM server is running.
+    - The default API URL is "http://localhost:11434". Adjust if your server is hosted elsewhere.
+    - Since there is no health endpoint, we skip any health check.
+    - The default generate endpoint is assumed to be "/v1/generate". Adjust this if necessary.
     """
 
-    def __init__(self, api_url: str = "http://localhost:11434"):
-        """
-        Initialize the integration with the default API URL.
-        :param api_url: The URL of the local LLM API.
-        """
+    def __init__(self, api_url: str = "http://localhost:11434", generate_endpoint: str = "/api/generate"):
         self.api_url = api_url
+        self.generate_endpoint = generate_endpoint
+        # No health endpoint; simply warn the user.
+        print("Warning: No health endpoint available. Skipping health check.")
 
     def send_prompt(self, prompt: str) -> str:
         """
-        Send a prompt to the LLM and return the response.
+        Send a prompt to the LLM and return its aggregated response.
+        If the response contains multiple JSON objects (one per line),
+        this method will concatenate the "response" values from all objects.
+        
         :param prompt: The prompt string to send.
-        :return: The response from the LLM, or an empty string in case of an error.
+        :return: A single aggregated response string from the LLM,
+                 or an empty string if parsing fails.
         """
         try:
-            # Prepare the payload for the LLM request.
             payload = {"prompt": prompt, "model": "qwen2.5-coder"}
-            # Send the prompt to the LLM API.
-            response = requests.post(self.api_url + "/generate", json=payload, timeout=10)
-            response.raise_for_status()  # Raise HTTPError for bad status codes.
-            data = response.json()
-            return data.get("response", "")
+            response = requests.post(self.api_url + self.generate_endpoint, json=payload, timeout=10)
+            response.raise_for_status()  # Raise an exception for HTTP errors.
+            try:
+                # First, try to parse the entire response as a single JSON object.
+                data = response.json()
+                return data.get("response", "")
+            except json.JSONDecodeError:
+                # If that fails, try to parse the response line by line.
+                raw_text = response.text.strip()
+                # print("Raw response received:", raw_text)  # Debug: print the raw response
+                lines = raw_text.splitlines()
+                accumulated_response = ""
+                for line in lines:
+                    try:
+                        data = json.loads(line)
+                        if "response" in data:
+                            accumulated_response += data.get("response", "")
+                    except json.JSONDecodeError:
+                        continue
+                if accumulated_response:
+                    return accumulated_response.strip()
+                else:
+                    print("Error: Unable to parse response as JSON.")
+                    return ""
         except requests.exceptions.Timeout:
             print("Error: Request to LLM timed out.")
             return ""
         except requests.exceptions.RequestException as e:
             print(f"Error: Request to LLM failed: {e}")
-            return ""
-        except json.JSONDecodeError:
-            print("Error: Failed to decode JSON response from LLM.")
             return ""

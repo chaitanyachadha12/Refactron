@@ -1,11 +1,10 @@
 """
 Author: Chaitanya Chadha
-Email: chaitanyachadha12@gwu.edu
-Created on: 02-06-2025
-Updated on: 
+Email: chaitanyachadha12@gmail.com
 """
 
 import subprocess
+import os
 
 class ToolIntegration:
     """
@@ -18,12 +17,14 @@ class ToolIntegration:
 
     def run_linter(self, file_path: str) -> str:
         """
-        Run a linter (e.g., flake8) on the specified file.
+        Run a linter (flake8) on the specified file.
+        If the file is not a Python file, return an appropriate message.
         :param file_path: Path to the file to lint.
         :return: Linter output or error message.
         """
+        if not file_path.lower().endswith('.py'):
+            return f"Skipping linting: {os.path.basename(file_path)} is not a Python file."
         try:
-            # Run flake8; ensure it is installed in the environment.
             result = subprocess.run(
                 ["flake8", file_path],
                 capture_output=True,
@@ -40,9 +41,10 @@ class ToolIntegration:
         except Exception as e:
             return f"Error running linter: {e}"
 
-    def run_tests(self) -> str:
+    def run_tests(self, test_directory: str) -> str:
         """
-        Run tests using pytest.
+        Run tests using pytest in the specified directory.
+        :param test_directory: Directory in which to run pytest.
         :return: Test results output or error message.
         """
         try:
@@ -50,7 +52,8 @@ class ToolIntegration:
                 ["pytest", "--maxfail=1", "--disable-warnings", "-q"],
                 capture_output=True,
                 text=True,
-                timeout=30
+                timeout=30,
+                cwd=test_directory  # Change working directory to the repository path.
             )
             if result.returncode != 0:
                 return result.stdout + result.stderr
