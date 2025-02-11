@@ -8,19 +8,15 @@ import json
 
 class LLMIntegration:
     """
-    Handles communication with the local LLM (e.g., Ollama running qwen2.5-coder).
+    Handles communication with the local LLM (e.g., Ollama running deepseek-r1:8b).
 
     IMPORTANT:
     - Ensure your local LLM server is running.
-    - The default API URL is "http://localhost:11434". Adjust if your server is hosted elsewhere.
-    - Since there is no health endpoint, we skip any health check.
-    - The default generate endpoint is assumed to be "/v1/generate". Adjust this if necessary.
     """
 
     def __init__(self, api_url: str = "http://localhost:11434", generate_endpoint: str = "/api/generate"):
         self.api_url = api_url
         self.generate_endpoint = generate_endpoint
-        # No health endpoint; simply warn the user.
         print("Warning: No health endpoint available. Skipping health check.")
 
     def send_prompt(self, prompt: str) -> str:
@@ -34,7 +30,7 @@ class LLMIntegration:
                  or an empty string if parsing fails.
         """
         try:
-            payload = {"prompt": prompt, "model": "qwen2.5-coder"}
+            payload = {"prompt": prompt, "model": "deepseek-r1:8b"}
             response = requests.post(self.api_url + self.generate_endpoint, json=payload, timeout=10)
             response.raise_for_status()  # Raise an exception for HTTP errors.
             try:
@@ -44,7 +40,6 @@ class LLMIntegration:
             except json.JSONDecodeError:
                 # If that fails, try to parse the response line by line.
                 raw_text = response.text.strip()
-                # print("Raw response received:", raw_text)  # Debug: print the raw response
                 lines = raw_text.splitlines()
                 accumulated_response = ""
                 for line in lines:

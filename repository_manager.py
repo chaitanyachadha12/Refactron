@@ -2,17 +2,18 @@
 Author: Chaitanya Chadha
 Email: chaitanyachadha12@gmail.com
 """
-
 # repository_manager.py
-
 import os
+import time
 import git  # Requires GitPython: pip install gitpython
 from typing import List, Dict, Any
+import ast
 
 class RepositoryManager:
     """
     Scans the repository and extracts code context.
     Skips directories and files that are likely to contain non-text (binary) data.
+    For Python files, it extracts function and class definitions as logical chunks.
     """
 
     def __init__(self, repo_path: str):
@@ -39,15 +40,12 @@ class RepositoryManager:
         Skips directories such as '.git', 'venv', '__pycache__', and files with binary extensions.
         """
         file_paths = []
-        # Set of file extensions to skip (you can add more if needed)
         skip_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.exe', '.dll', '.so', '.bin'}
         try:
             for root, dirs, files in os.walk(self.repo_path):
-                # Skip directories that are not relevant
                 if any(excluded in root for excluded in ['.git', 'venv', '__pycache__']):
                     continue
                 for file in files:
-                    # Skip hidden files
                     if file.startswith('.'):
                         continue
                     ext = os.path.splitext(file)[1].lower()
@@ -74,22 +72,71 @@ class RepositoryManager:
     def get_code_chunks(self, max_chunk_size: int = 1000) -> List[Dict[str, Any]]:
         """
         Get code chunks from the repository.
-        For small files, returns the full content; for larger files, splits into chunks.
+        - For Python files (.py), attempts to parse using the AST module and extract functions and classes.
+        - For other files or in case of parsing errors, falls back to simple chunking.
         """
         chunks = []
         files = self.get_all_files()
         for file in files:
             content = self.read_file(file)
-            if content:
-                if len(content) <= max_chunk_size:
-                    chunks.append({"file": file, "content": content})
+            if not content:
+                continue
+
+            file_size = len(content)
+            modification_time = os.path.getmtime(file)
+            ext = os.path.splitext(file)[1].lower()
+
+            if ext == ".py":
+                # Attempt to parse and extract functions and classes
+                try:
+                    tree = ast.parse(content, filename=file)
+                    for node in ast.walk(tree):
+                        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                            if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
+                                start = node.lineno - 1  # Convert to 0-indexed
+                                end = node.end_lineno
+                                lines = content.splitlines()
+                                snippet = "\n".join(lines[start:end])
+                                chunks.append({
+                                    "file": file,
+                                    "type": "function" if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else "class",
+                                    "name": node.name,
+                                    "content": snippet,
+                                    "modified": time.ctime(modification_time)
+                                })
+                except Exception as e:
+                    print(f"Error parsing Python file {file}: {e}")
+                    # Fall back to basic chunking if parsing fails
+                    if file_size <= max_chunk_size:
+                        chunks.append({
+                            "file": file,
+                            "content": content,
+                            "modified": time.ctime(modification_time)
+                        })
+                    else:
+                        for i in range(0, file_size, max_chunk_size):
+                            chunk_content = content[i:i + max_chunk_size]
+                            chunks.append({
+                                "file": file,
+                                "content": chunk_content,
+                                "chunk_index": i // max_chunk_size,
+                                "modified": time.ctime(modification_time)
+                            })
+            else:
+                # For non-Python files, use basic chunking
+                if file_size <= max_chunk_size:
+                    chunks.append({
+                        "file": file,
+                        "content": content,
+                        "modified": time.ctime(modification_time)
+                    })
                 else:
-                    # Split file content into chunks of up to max_chunk_size characters.
-                    for i in range(0, len(content), max_chunk_size):
+                    for i in range(0, file_size, max_chunk_size):
                         chunk_content = content[i:i + max_chunk_size]
                         chunks.append({
                             "file": file,
                             "content": chunk_content,
-                            "chunk_index": i // max_chunk_size
+                            "chunk_index": i // max_chunk_size,
+                            "modified": time.ctime(modification_time)
                         })
         return chunks

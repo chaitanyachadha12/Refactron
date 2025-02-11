@@ -4,29 +4,25 @@ Email: chaitanyachadha12@gmail.com
 """
 
 from typing import List, Dict
+from retrieval_module import RetrievalModule
 
 class PromptEngineer:
     """
-    PromptEngineer class to build prompts by merging user queries with code context.
-    Currently, it concatenates a few code chunks; later, a retrieval system can be integrated.
+    Builds a prompt by merging the user's query with relevant code context.
     """
 
     def __init__(self):
-        pass
+        self.retrieval = RetrievalModule()
 
     def build_prompt(self, query: str, code_chunks: List[Dict[str, str]]) -> str:
         """
-        Build a prompt by combining the user's query with relevant code chunks.
-        :param query: The user's query.
-        :param code_chunks: A list of dictionaries, each containing 'file' and 'content' keys.
-        :return: A string prompt ready to be sent to the LLM.
+        Build a prompt by retrieving the most relevant code chunks.
         """
-        prompt = f"User Query: {query}\n\n"
-        prompt += "Code Context:\n"
-        # For simplicity, we select the first 3 chunks.
-        # Future implementation: use a retrieval system to select the most relevant chunks.
-        for chunk in code_chunks[:3]:
+        self.retrieval.embed_chunks(code_chunks)
+        relevant_chunks = self.retrieval.search(query, top_k=3)
+        prompt = f"User Query: {query}\n\nCode Context:\n"
+        for chunk in relevant_chunks:
             file = chunk.get("file", "unknown")
-            content = chunk.get("content", "")
-            prompt += f"\n--- File: {file} ---\n{content}\n"
+            snippet = chunk.get("content", "")
+            prompt += f"\n--- File: {file} ---\n{snippet}\n"
         return prompt
