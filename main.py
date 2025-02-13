@@ -6,22 +6,20 @@ Email: chaitanyachadha12@gmail.com
 import os
 import json
 import typer
+import subprocess
 from repository_manager import RepositoryManager
 from prompt_engineering import PromptEngineer
 from llm_integration import LLMIntegration
 from tool_integration import ToolIntegration
+from test_generator import generate_test_file, generate_custom_test_file
+from diff_view import live_diff_view
+from autotest import watch_and_run_tests
+from executor import run_in_sandbox
 
-# For autonomous test file generation
-from test_generator import generate_test_file
 app = typer.Typer()
-
-# Configuration file to persist repository path
 CONFIG_FILE = os.path.expanduser("~/.ai_coding_agent_config.json")
 
 def save_repo_path(repo_path: str):
-    """
-    Save the repository path in a configuration file.
-    """
     try:
         with open(CONFIG_FILE, "w") as f:
             json.dump({"repo_path": repo_path}, f)
@@ -29,9 +27,6 @@ def save_repo_path(repo_path: str):
         typer.echo(f"Error saving repository path: {e}")
 
 def load_repo_path() -> str:
-    """
-    Load the repository path from the configuration file.
-    """
     try:
         with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
@@ -42,12 +37,6 @@ def load_repo_path() -> str:
 
 @app.command("init-repo")
 def init_repo(repo_path: str):
-    """
-    Initialize and load the Git repository.
-
-    Example:
-      python main.py init-repo /Users/yourname/projects/my_repo
-    """
     repo_manager = RepositoryManager(repo_path)
     if repo_manager.load_repository():
         save_repo_path(repo_path)
@@ -57,29 +46,18 @@ def init_repo(repo_path: str):
 
 @app.command("query")
 def query(query_text: str):
-    """
-    Send a query to the AI Coding Agent to analyze the codebase and suggest modifications.
-
-    Example:
-      python main.py query "Refactor the function that calculates user age."
-    """
     repo_path = load_repo_path()
     if not repo_path:
         typer.echo("Error: Repository not initialized. Please run 'init-repo' first.")
         raise typer.Exit(code=1)
-        
     repo_manager = RepositoryManager(repo_path)
     if not repo_manager.load_repository():
         typer.echo("Error: Unable to load the repository from the stored path.")
         raise typer.Exit(code=1)
-    
-    # Retrieve code chunks (with intelligent chunking)
     code_chunks = repo_manager.get_code_chunks()
     prompt_engineer = PromptEngineer()
     prompt = prompt_engineer.build_prompt(query_text, code_chunks)
-    
-    # Initialize LLM integration (endpoint configurable)
-    llm = LLMIntegration()  
+    llm = LLMIntegration()
     typer.echo("Sending prompt to LLM...")
     response = llm.send_prompt(prompt)
     if response:
@@ -90,12 +68,6 @@ def query(query_text: str):
 
 @app.command("lint")
 def lint(file_path: str):
-    """
-    Run linting on the specified file.
-
-    Example:
-      python main.py lint /Users/yourname/projects/my_repo/main.py
-    """
     tool_integration = ToolIntegration()
     result = tool_integration.run_linter(file_path)
     typer.echo("Linter Output:")
@@ -103,18 +75,10 @@ def lint(file_path: str):
 
 @app.command("test")
 def run_tests():
-    """
-    Run tests using pytest.
-    The test runner will search for test files in the repository path stored in the configuration file.
-
-    Example:
-      python main.py test
-    """
     repo_path = load_repo_path()
     if not repo_path:
         typer.echo("Error: Repository not initialized. Please run 'init-repo' first.")
         raise typer.Exit(code=1)
-    
     tool_integration = ToolIntegration()
     result = tool_integration.run_tests(repo_path)
     typer.echo("Test Results:")
@@ -122,12 +86,6 @@ def run_tests():
 
 @app.command("preview")
 def preview(original_file: str, new_file: str):
-    """
-    Generate a diff preview between the original file and the modified file.
-
-    Example:
-      python main.py preview /Users/yourname/projects/my_repo/module.py /Users/yourname/projects/my_repo/module_new.py
-    """
     tool_integration = ToolIntegration()
     try:
         with open(original_file, 'r', encoding='utf-8') as f:
@@ -145,12 +103,6 @@ def preview(original_file: str, new_file: str):
 
 @app.command("apply_changes")
 def apply_changes(original_file: str, new_file: str):
-    """
-    Apply changes to a file after previewing the diff and receiving user confirmation.
-
-    Example:
-      python main.py apply_changes /Users/yourname/projects/my_repo/module.py /Users/yourname/projects/my_repo/module_new.py
-    """
     tool_integration = ToolIntegration()
     try:
         with open(original_file, 'r', encoding='utf-8') as f:
@@ -172,12 +124,6 @@ def apply_changes(original_file: str, new_file: str):
 
 @app.command("scan")
 def scan(repo_path: str):
-    """
-    Scan the repository and display extracted code chunks (using intelligent AST-based chunking for Python files).
-
-    Example:
-      python main.py scan --repo-path small_project
-    """
     repo_manager = RepositoryManager(repo_path)
     if not repo_manager.load_repository():
         typer.echo("Failed to load repository.")
@@ -189,16 +135,10 @@ def scan(repo_path: str):
         if 'name' in chunk:
             typer.echo(f"Type: {chunk.get('type')}, Name: {chunk.get('name')}")
         typer.echo("Snippet:")
-        typer.echo(chunk.get("content")[:200])  # Show first 200 characters
+        typer.echo(chunk.get("content")[:200])
 
 @app.command("retrieve")
 def retrieve(repo_path: str, query: str):
-    """
-    Retrieve and display the prompt built from the most relevant code chunks using the retrieval module.
-
-    Example:
-      python main.py retrieve --repo-path small_project --query "How to add two numbers?"
-    """
     repo_manager = RepositoryManager(repo_path)
     if not repo_manager.load_repository():
         typer.echo("Failed to load repository.")
@@ -211,26 +151,98 @@ def retrieve(repo_path: str, query: str):
 
 @app.command("generate-test")
 def generate_test(file: str):
-    """
-    Generate a skeleton test file for the specified Python file.
-
-    Example:
-      python main.py generate-test --file small_project/app.py
-    """
-    generate_test_file(file)
+    repo_path = load_repo_path()
+    if not repo_path:
+        typer.echo("Repository not initialized. Run 'init-repo' first.")
+        raise typer.Exit(code=1)
+    generate_test_file(file, repo_path=repo_path)
     typer.echo("Test file generation attempted.")
+
+@app.command("generate-custom-test")
+def generate_custom_test(file: str):
+    repo_path = load_repo_path()
+    if not repo_path:
+        typer.echo("Repository not initialized. Run 'init-repo' first.")
+        raise typer.Exit(code=1)
+    generate_custom_test_file(file, repo_path=repo_path)
+    typer.echo("Custom test file generation attempted.")
 
 @app.command("add-plugin")
 def add_plugin(plugin_url: str):
-    """
-    Add an external plugin to Refactron.
-    This is a stub command. Actual plugin installation logic should be implemented here.
+    plugins_dir = os.path.join(os.getcwd(), "plugins")
+    os.makedirs(plugins_dir, exist_ok=True)
+    plugin_name = os.path.basename(plugin_url)
+    if plugin_name.endswith(".git"):
+        plugin_name = plugin_name[:-4]
+    target_path = os.path.join(plugins_dir, plugin_name)
+    if os.path.exists(target_path):
+        typer.echo(f"Plugin '{plugin_name}' already exists.")
+        raise typer.Exit()
+    try:
+        typer.echo(f"Cloning plugin from {plugin_url} into {target_path}...")
+        subprocess.check_call(["git", "clone", plugin_url, target_path])
+    except subprocess.CalledProcessError as e:
+        typer.echo(f"Error cloning plugin: {e}")
+        raise typer.Exit(code=1)
+    plugins_json = os.path.join(plugins_dir, "plugins.json")
+    plugins_list = []
+    if os.path.exists(plugins_json):
+        try:
+            with open(plugins_json, "r") as f:
+                plugins_list = json.load(f)
+        except Exception as e:
+            typer.echo(f"Error reading plugins.json: {e}")
+    plugins_list.append({"name": plugin_name, "url": plugin_url, "path": target_path})
+    try:
+        with open(plugins_json, "w") as f:
+            json.dump(plugins_list, f, indent=4)
+    except Exception as e:
+        typer.echo(f"Error writing plugins.json: {e}")
+        raise typer.Exit(code=1)
+    typer.echo(f"Plugin '{plugin_name}' added successfully.")
 
-    Example:
-      python main.py add-plugin --plugin-url https://example.com/myplugin.git
+@app.command("live-diff")
+def live_diff(file_path: str):
     """
-    # Stub: Implement your plugin installation logic here
-    typer.echo(f"Plugin {plugin_url} added successfully (stub).")
+    Launch a live diff view for the specified file.
+    
+    Example:
+      python main.py live-diff /path/to/repo/module.py
+    """
+    live_diff_view(file_path)
+
+@app.command("selective-apply")
+def selective_apply_cmd(original_file: str, modified_file: str):
+    """
+    Interactively review and apply changes from a modified file to the original file.
+    
+    Example:
+      python main.py selective-apply /path/to/repo/module.py /path/to/repo/module_new.py
+    """
+    from change_selector import selective_apply
+    selective_apply(original_file, modified_file)
+
+@app.command("auto-test")
+def auto_test(repo_path: str):
+    """
+    Watch the repository for changes and automatically run tests.
+    
+    Example:
+      python main.py auto-test /path/to/repo
+    """
+    watch_and_run_tests(repo_path)
+
+@app.command("run-sandbox")
+def run_sandbox(code: str):
+    """
+    Execute the provided code snippet in a sandboxed environment.
+    
+    Example:
+      python main.py run-sandbox "print('Hello from sandbox')"
+    """
+    output = run_in_sandbox(code)
+    typer.echo("Sandboxed Execution Output:")
+    typer.echo(output)
 
 if __name__ == "__main__":
     app()

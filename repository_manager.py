@@ -2,10 +2,10 @@
 Author: Chaitanya Chadha
 Email: chaitanyachadha12@gmail.com
 """
-# repository_manager.py
+
 import os
 import time
-import git  # Requires GitPython: pip install gitpython
+import git
 from typing import List, Dict, Any
 import ast
 
@@ -21,9 +21,6 @@ class RepositoryManager:
         self.repo = None
 
     def load_repository(self) -> bool:
-        """
-        Load the repository using GitPython.
-        """
         try:
             self.repo = git.Repo(self.repo_path)
             return True
@@ -35,10 +32,6 @@ class RepositoryManager:
             return False
 
     def get_all_files(self) -> List[str]:
-        """
-        Recursively get all file paths in the repository.
-        Skips directories such as '.git', 'venv', '__pycache__', and files with binary extensions.
-        """
         file_paths = []
         skip_extensions = {'.png', '.jpg', '.jpeg', '.gif', '.exe', '.dll', '.so', '.bin'}
         try:
@@ -58,10 +51,6 @@ class RepositoryManager:
             return []
 
     def read_file(self, file_path: str) -> str:
-        """
-        Read a file as text.
-        Returns an empty string if the file cannot be read.
-        """
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 return f.read()
@@ -72,8 +61,8 @@ class RepositoryManager:
     def get_code_chunks(self, max_chunk_size: int = 1000) -> List[Dict[str, Any]]:
         """
         Get code chunks from the repository.
-        - For Python files (.py), attempts to parse using the AST module and extract functions and classes.
-        - For other files or in case of parsing errors, falls back to simple chunking.
+        For Python files (.py), attempts to parse using the AST module and extract functions and classes.
+        For other files or if parsing fails, falls back to basic chunking.
         """
         chunks = []
         files = self.get_all_files()
@@ -81,19 +70,16 @@ class RepositoryManager:
             content = self.read_file(file)
             if not content:
                 continue
-
             file_size = len(content)
             modification_time = os.path.getmtime(file)
             ext = os.path.splitext(file)[1].lower()
-
             if ext == ".py":
-                # Attempt to parse and extract functions and classes
                 try:
                     tree = ast.parse(content, filename=file)
                     for node in ast.walk(tree):
                         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
                             if hasattr(node, "lineno") and hasattr(node, "end_lineno"):
-                                start = node.lineno - 1  # Convert to 0-indexed
+                                start = node.lineno - 1
                                 end = node.end_lineno
                                 lines = content.splitlines()
                                 snippet = "\n".join(lines[start:end])
@@ -106,7 +92,6 @@ class RepositoryManager:
                                 })
                 except Exception as e:
                     print(f"Error parsing Python file {file}: {e}")
-                    # Fall back to basic chunking if parsing fails
                     if file_size <= max_chunk_size:
                         chunks.append({
                             "file": file,
@@ -123,7 +108,6 @@ class RepositoryManager:
                                 "modified": time.ctime(modification_time)
                             })
             else:
-                # For non-Python files, use basic chunking
                 if file_size <= max_chunk_size:
                     chunks.append({
                         "file": file,

@@ -7,17 +7,10 @@ from typing import List, Dict
 from retrieval_module import RetrievalModule
 
 class PromptEngineer:
-    """
-    Builds a prompt by merging the user's query with relevant code context.
-    """
-
     def __init__(self):
         self.retrieval = RetrievalModule()
 
     def build_prompt(self, query: str, code_chunks: List[Dict[str, str]]) -> str:
-        """
-        Build a prompt by retrieving the most relevant code chunks.
-        """
         self.retrieval.embed_chunks(code_chunks)
         relevant_chunks = self.retrieval.search(query, top_k=3)
         prompt = f"User Query: {query}\n\nCode Context:\n"
