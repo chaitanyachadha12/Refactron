@@ -17,7 +17,6 @@ class LLMIntegration:
     def __init__(self, api_url: str = "http://localhost:11434", generate_endpoint: str = "/api/generate"):
         self.api_url = api_url
         self.generate_endpoint = generate_endpoint
-        print("Warning: No health endpoint available. Skipping health check.")
 
     def send_prompt(self, prompt: str) -> str:
         """
