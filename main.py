@@ -376,6 +376,7 @@ def add_plugin(plugin_url: str):
     try:
         with open(plugins_json, "w") as f:
             json.dump(plugins_list, f, indent=4)
+            print(f"Plugin '{plugin_name}' added to plugins.json.") # remove this line if you don't want to print it
     except Exception as e:
         typer.echo(f"Error writing plugins.json: {e}")
         raise typer.Exit(code=1)
